@@ -22,6 +22,17 @@ nltk.download('stopwords')
 nltk.download('wordnet')
 
 def load_data(database_filepath):
+    """
+    Load data from a SQLite database and process it into a format suitable for model training.
+    
+    Parameters:
+    - database_filepath (str): The file path to the SQLite database.
+    
+    Returns:
+    - X (Series): The input variable (messages).
+    - Y (DataFrame): The target variables (categories in one-hot encoded format).
+    - category_names (Index): The names of the categories.
+    """
     conn = sqlite3.connect(database_filepath)
     query = f"""
         SELECT 
@@ -57,6 +68,15 @@ def load_data(database_filepath):
 
 
 def tokenize(text):
+    """
+    Tokenize, lemmatize, and remove stop words from the input text.
+    
+    Parameters:
+    - text (str): The text to be processed.
+    
+    Returns:
+    - lemmed (list of str): The processed text as a list of tokens.
+    """
     normalized_text = text.lower()
     tokenized_text = word_tokenize(normalized_text)
     words = [w for w in tokenized_text if w not in stopwords.words("english")]
@@ -65,6 +85,12 @@ def tokenize(text):
 
 
 def build_model():
+    """
+    Build a machine learning pipeline that processes text messages and predicts classifications for all categories.
+    
+    Returns:
+    - cv (GridSearchCV): A GridSearchCV object with the pipeline and parameter grid.
+    """
     pipeline = Pipeline([
         ('features', FeatureUnion([
 
@@ -77,16 +103,31 @@ def build_model():
         ('clf', RandomForestClassifier())
     ])
 
+    # parameters = {
+    #     'features__text_pipeline__vect__ngram_range': ((1, 1), (1, 2)),
+    #     'clf__n_estimators': [50, 100, 200],
+    #     'clf__min_samples_split': [2, 3, 4]
+    # }
+
     parameters = {
-        'features__text_pipeline__vect__ngram_range': ((1, 1), (1, 2)),
-        'clf__n_estimators': [50, 100, 200],
-        'clf__min_samples_split': [2, 3, 4]
+        'features__text_pipeline__vect__ngram_range': ((1, 1),),
+        'clf__n_estimators': [50],
+        'clf__min_samples_split': [2]
     }
 
     cv = GridSearchCV(pipeline, param_grid=parameters)
     return cv
 
 def evaluate_model(model, X_test, Y_test, category_names):
+    """
+    Evaluate the model's performance on the test set.
+    
+    Parameters:
+    - model: The trained model.
+    - X_test (Series): The input variables for the test set.
+    - Y_test (DataFrame): The true labels for the test set.
+    - category_names (Index): The names of the categories.
+    """
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(Y_test, y_pred)
     print('Accuracy: {:.2f}%'.format(accuracy * 100))
@@ -94,11 +135,26 @@ def evaluate_model(model, X_test, Y_test, category_names):
     print(classification_values)
 
 def save_model(model, model_filepath):
+    """
+    Save the trained model as a pickle file.
+    
+    Parameters:
+    - model: The trained model.
+    - model_filepath (str): The file path to save the model to.
+    """
     with open(model_filepath, 'wb') as file_to_write:
         pickle.dump(model, file_to_write)
 
 
 def main():
+    """
+    Main function to run the machine learning pipeline. It loads data, splits it into a training set and a test set, 
+    builds a model, trains the model, evaluates the model, and then saves the model to a pickle file.
+
+    Example usage: 
+    python train_classifier.py {DB location} {Output location to save the classifier}
+    python train_classifier.py ../data/DisasterResponse.db classifier.pkl
+    """
     if len(sys.argv) == 3:
         database_filepath, model_filepath = sys.argv[1:]
         print('Loading data...\n    DATABASE: {}'.format(database_filepath))

@@ -16,6 +16,15 @@ from sqlalchemy import create_engine
 app = Flask(__name__)
 
 def tokenize(text):
+    """
+    Tokenize, lemmatize, and clean the input text.
+    
+    Parameters:
+    - text (str): The text to be processed.
+    
+    Returns:
+    - clean_tokens (list of str): The processed text as a list of clean tokens.
+    """
     tokens = word_tokenize(text)
     lemmatizer = WordNetLemmatizer()
 
@@ -27,9 +36,20 @@ def tokenize(text):
     return clean_tokens
 
 # load data
+query = f"""
+        select category_name cat_name_by_message, count(*) as cnt_of_messages
+        from messages m 
+        inner join categories c on m.id = c.id 
+        group by category_name 
+        order by count(*) desc
+        limit 15
+        ;
+    """
+
 engine = create_engine('sqlite:///../data/DisasterResponse.db')
 df = pd.read_sql_table('messages', engine)
 categories_labels = list(pd.read_sql_table('categories_labels', engine).sort_values(by="id")['category_name'])
+categories_distribution = pd.read_sql_query(query, engine)
 
 # load model
 model = joblib.load("../models/classifier.pkl")
@@ -38,14 +58,19 @@ model = joblib.load("../models/classifier.pkl")
 @app.route('/')
 @app.route('/index')
 def index():
-    
+    """
+    Main page of web app.
+    - Extracts data for plotting
+    - Creates plotly visualizations
+    - Renders the main page with plotly graphs
+    """
     # extract data needed for visuals
-    # TODO: Below is an example - modify to extract data for your own visuals
     genre_counts = df.groupby('genre').count()['message']
     genre_names = list(genre_counts.index)
+
+    messages_by_cat_counts = list(categories_distribution['cnt_of_messages'])
+    messages_by_cat_names = list(categories_distribution['cat_name_by_message'])
     
-    # create visuals
-    # TODO: Below is an example - modify to create your own visuals
     graphs = [
         {
             'data': [
@@ -57,6 +82,24 @@ def index():
 
             'layout': {
                 'title': 'Distribution of Message Genres',
+                'yaxis': {
+                    'title': "Count"
+                },
+                'xaxis': {
+                    'title': "Genre"
+                }
+            }
+        },
+        {
+            'data': [
+                Bar(
+                    x=messages_by_cat_names,
+                    y=messages_by_cat_counts
+                )
+            ],
+
+            'layout': {
+                'title': 'TOP 15 Message Categories',
                 'yaxis': {
                     'title': "Count"
                 },
@@ -78,6 +121,12 @@ def index():
 # web page that handles user query and displays model results
 @app.route('/go')
 def go():
+    """
+    Web page that handles user query and displays model results.
+    - Receives user input text
+    - Uses model to predict classification
+    - Renders the go.html page with the classification results
+    """
     # save user input in query
     query = request.args.get('query', '') 
 
@@ -94,6 +143,12 @@ def go():
 
 
 def main():
+    """
+    Main function to run the Flask app.
+    - Runs the app on host 0.0.0.0, port 3000, with debug mode on.
+    Example usage:
+    python run.py
+    """
     app.run(host='0.0.0.0', port=3000, debug=True)
 
 
